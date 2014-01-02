@@ -16,7 +16,7 @@ curMouseMoveTimeout = 0
 
 
 @init = () ->
-	canvas = document.getElementById("main")
+	canvas = document.getElementById("mainCanvas")
 
 	stage = new createjs.Stage(canvas)
 	stage.autoClear = false

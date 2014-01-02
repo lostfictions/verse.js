@@ -11,7 +11,8 @@ config =
 	contactTimeout: 400
 
 	contactVelocityFactor: 0.5
-	distanceScaleFactor: 10
+	dotSpeedThreshold: 10
+	dotDeceleration: 0.99
 	fadeFactor: 0.05
 	mouseMoveTimeout: 300
 	# maxDotCount: 1 # set in init(), since it's based on the canvas size
@@ -52,10 +53,14 @@ mouseMoveTimeout = 0
 	createjs.Ticker.addEventListener("tick", onTick)
 
 onTick = (event) ->
+
+	mouseMoveTimeout -= event.delta
+	dMouseX = stage.mouseX - lastMouse.x
+	dMouseY = stage.mouseY - lastMouse.y
+	
 	if(dots.length < config.maxDotCount and Math.random() < 0.2)
 		addDot()
 
-	mouseMoveTimeout -= event.delta
 
 	g = drawingCanvas.graphics
 
@@ -66,12 +71,11 @@ onTick = (event) ->
 
 
 	wasNotePlayed = false
-	sqDistThresh = config.maxContactDistance * config.maxContactDistance
 
 	for dot in dots
 		drawingCanvas.graphics.moveTo(dot.x, dot.y)
-		dot.x += Math.random() * 5 - 2.5
-		dot.y += Math.random() * 5 - 2.5
+		dot.x += dot.velocity.x
+		dot.y += dot.velocity.y
 		drawingCanvas.graphics.lineTo(dot.x, dot.y)
 
 		wrapToStage dot
@@ -81,9 +85,9 @@ onTick = (event) ->
 		for otherDot in dots when otherDot isnt dot
 			dx = dot.x - otherDot.x
 			dy = dot.y - otherDot.y
-			dist = dx * dx + dy * dy
+			dist = Math.sqrt(dx * dx + dy * dy)
 
-			if(dist < sqDistThresh)
+			if(dist < config.maxContactDistance)
 
 				if(dist > 0)
 					vf = config.contactVelocityFactor
@@ -102,14 +106,47 @@ onTick = (event) ->
 					if(not wasNotePlayed)
 						wasNotePlayed = true
 
-						
+						# (only the first terms are halved here. that's how it was in the original.)
+						dvx = 0.5 * Math.abs(dot.velocity.x) + Math.abs(otherDot.velocity.x)
+						dvy = 0.5 * Math.abs(dot.velocity.y) + Math.abs(otherDot.velocity.y)
 
+						relativeSpeed = Math.sqrt(dvx * dvx + dvy * dvy)
 
+						# _s._sound.addTone(
+						# 	440,
+						# 	scale_verse[
+						# 		Math.max(
+						# 			0,
+						# 			int(Math.random() * 2 ) * 2 - 1 + Math.min(
+						# 				scale_verse.length - 1 - uint(scale_verse.length * yd / sH),
+						# 				scale_verse.length - 1
+						# 			)
+						# 		)
+						# 	],
+						# 	-1,
+						# 	xd / (sW * .5) - 1,
+						# 	1,
+						# 	(.2 + .8 * (d / s)) * VOLUME //s = 10.
+						# );
+		
+		# end iterating through other dots.
 
+		dX = dot.x - stage.mouseX
+		dY = dot.y - stage.mouseY
 
+		distMouse = Math.sqrt(dX * dX + dY * dY)
 
+		if(distMouse < config.maxMouseDistance)
+			dot.velocity.x += 0.001 * (config.maxMouseDistance - distMouse) * dMouseX
+			dot.velocity.y += 0.001 * (config.maxMouseDistance - distMouse) * dMouseY
+		
+		speed = Math.sqrt(dot.velocity.x * dot.velocity.x + dot.velocity.y * dot.velocity.y)
+		if(speed > config.dotSpeedThreshold)
+			dot.velocity.x = config.dotSpeedThreshold * dot.velocity.x / speed
+			dot.velocity.y = config.dotSpeedThreshold * dot.velocity.y / speed
 
-			
+		dot.velocity.x *= config.dotDeceleration
+		dot.velocity.y *= config.dotDeceleration
 
 	lastMouse.x = stage.mouseX
 	lastMouse.y = stage.mouseY

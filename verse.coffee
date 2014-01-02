@@ -151,7 +151,7 @@ onTick = (event) ->
 						MYSTERY_FACTOR = dvx / (canvas.width * 0.5) - 1
 
 						# these numbers might not make sense for the SoundJS API.
-						volume = 0.2 + 0.8 * d / config.dotSpeedThreshold
+						volume = 0.2 + 0.8 * relativeSpeed / config.dotSpeedThreshold
 
 						#TODO: here we will play a beautiful sound.
 		

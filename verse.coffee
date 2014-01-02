@@ -1,38 +1,23 @@
 'use strict'
 
+canvas = stage = drawingCanvas = null
 
-canvas = undefined
-stage = undefined
-drawingCanvas = undefined
-oldPt = undefined
-oldMidPt = undefined
-title = undefined
-color = undefined
-stroke = undefined
-colors = undefined
-index = undefined
+config =
+	distanceScale: 10
+	# maxDotCount
+
+dots = []
+
+lastMouse = { x: 0, y: 0 }
+
+# this is in milliseconds instead of ticks now.
+mouseMoveTimeout = 300
+curMouseMoveTimeout = 0
+
 
 @init = () ->
-
 	canvas = document.getElementById("main")
 
-	index = 0
-
-	colors = [
-		"#828b20"
-		"#b0ac31"
-		"#cbc53d"
-		"#fad779"
-		"#f9e4ad"
-		"#faf2db"
-		"#563512"
-		"#9b4a0b"
-		"#d36600"
-		"#fe8a00"
-		"#f9a71f"
-	]
-
-	#check to see if we are running in a browser with touch support
 	stage = new createjs.Stage(canvas)
 	stage.autoClear = false
 	stage.enableDOMEvents(true)
@@ -41,52 +26,68 @@ index = undefined
 	createjs.Ticker.setFPS(24)
 
 	drawingCanvas = new createjs.Shape()
-
-	stage.addEventListener("stagemousedown", handleMouseDown)
-	stage.addEventListener("stagemouseup", handleMouseUp)
-
-	title = new createjs.Text("Click and Drag to draw", "36px Arial", "#777777")
-	title.x = 300
-	title.y = 200
-	stage.addChild(title)
-
 	stage.addChild(drawingCanvas)
-	stage.update()
 
-stop = () -> {}
+	# console.log(stage.canvas)
 
-handleMouseDown = (event) ->
-	if(stage.contains(title))
-		stage.clear()
-		stage.removeChild(title)
+	config.maxDotCount = Math.round(60 * stage.canvas.width / 700)
 
-	color = colors[ (index++) % colors.length ]
+	stage.addEventListener("stagemousemove", onMouseMove)
+	createjs.Ticker.addEventListener("tick", onTick)
 
-	stroke = Math.random() * 30 + 10 | 0
+	# stage.update()
 
-	oldPt = new createjs.Point(stage.mouseX, stage.mouseY)
 
-	oldMidPt = oldPt
+stop = () ->
+	return
 
-	stage.addEventListener("stagemousemove", handleMouseMove)
+addDot = () ->
+	dot = new createjs.Point(
+		Math.random() * stage.canvas.width,
+		Math.random() * stage.canvas.height
+	)
 
-handleMouseMove = (event) ->
-	midPt = new createjs.Point(oldPt.x + stage.mouseX >> 1, oldPt.y + stage.mouseY >> 1)
+	dots.push(dot)
+
+onTick = (event) ->
+	if(dots.length < config.maxDotCount and Math.random() < 0.2)
+		addDot()
+
+	mouseMoveTimeout -= event.delta
 
 	drawingCanvas.graphics
 		.clear()
-		.setStrokeStyle(stroke, 'round', 'round')
-		.beginStroke(color)
-		.moveTo(midPt.x, midPt.y)
-		.curveTo(oldPt.x, oldPt.y, oldMidPt.x, oldMidPt.y)
+		.setStrokeStyle(1)
+		.beginStroke('#000000')
+		# .beginStroke('#ffffff')
 
-	oldPt.x = stage.mouseX
-	oldPt.y = stage.mouseY
+	for dot in dots
+		drawingCanvas.graphics.moveTo(dot.x, dot.y)
+		dot.x += Math.random() * 5 - 2.5
+		dot.y += Math.random() * 5 - 2.5
+		drawingCanvas.graphics.lineTo(dot.x, dot.y)
 
-	oldMidPt.x = midPt.x
-	oldMidPt.y = midPt.y
+		# .moveTo(midPt.x, midPt.y)
+		# .curveTo(oldPt.x, oldPt.y, oldMidPt.x, oldMidPt.y)
+
+
+	lastMouse.x = stage.mouseX
+	lastMouse.y = stage.mouseY
 
 	stage.update()
 
-handleMouseUp = (event) ->
-	stage.removeEventListener("stagemousemove", handleMouseMove)
+onMouseMove = (event) ->
+	# midPt = new createjs.Point(oldPt.x + stage.mouseX >> 1, oldPt.y + stage.mouseY >> 1)
+
+	# drawingCanvas.graphics
+	# 	.clear()
+	# 	.setStrokeStyle(stroke, 'round', 'round')
+	# 	.beginStroke(color)
+	# 	.moveTo(midPt.x, midPt.y)
+	# 	.curveTo(oldPt.x, oldPt.y, oldMidPt.x, oldMidPt.y)
+
+	# oldPt.x = stage.mouseX
+	# oldPt.y = stage.mouseY
+
+	# oldMidPt.x = midPt.x
+	# oldMidPt.y = midPt.y

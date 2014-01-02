@@ -3,8 +3,11 @@
 canvas = stage = drawingCanvas = null
 
 config =
-	distanceScale: 10
-	# maxDotCount
+	maxMouseDistance: 100
+	distanceFactor: 10
+	contactTimeout: 400 # time in ms before a line can jump to another and try to play a sound.
+	fadeFactor: 0.05
+	# maxDotCount  # set in init(), since it's based on the canvas size
 
 dots = []
 
@@ -13,7 +16,6 @@ lastMouse = { x: 0, y: 0 }
 # this is in milliseconds instead of ticks now.
 mouseMoveTimeout = 300
 curMouseMoveTimeout = 0
-
 
 @init = () ->
 	canvas = document.getElementById("mainCanvas")
@@ -25,27 +27,30 @@ curMouseMoveTimeout = 0
 	createjs.Touch.enable(stage)
 	createjs.Ticker.setFPS(24)
 
+	canvas.setAttribute("style", "background-color: #000000")
+
+	fadeRect = new createjs.Shape()
+	fadeRect.graphics
+		.beginFill("rgba(0,0,0,#{ config.fadeFactor })")
+		.rect(0, 0, canvas.width, canvas.height)
+	stage.addChild(fadeRect)
+
 	drawingCanvas = new createjs.Shape()
 	stage.addChild(drawingCanvas)
 
-	# console.log(stage.canvas)
-
-	config.maxDotCount = Math.round(60 * stage.canvas.width / 700)
+	config.maxDotCount = Math.round(60 * canvas.width / 700)
 
 	stage.addEventListener("stagemousemove", onMouseMove)
 	createjs.Ticker.addEventListener("tick", onTick)
 
-	# stage.update()
-
-
-stop = () ->
-	return
 
 addDot = () ->
 	dot = new createjs.Point(
-		Math.random() * stage.canvas.width,
-		Math.random() * stage.canvas.height
+		Math.random() * canvas.width,
+		Math.random() * canvas.height
 	)
+	dot.velocity = new createjs.Point(0, 0)
+	dot.contactTimeout = config.contactTimeout
 
 	dots.push(dot)
 
@@ -58,8 +63,7 @@ onTick = (event) ->
 	drawingCanvas.graphics
 		.clear()
 		.setStrokeStyle(1)
-		.beginStroke('#000000')
-		# .beginStroke('#ffffff')
+		.beginStroke('#ffffff')
 
 	for dot in dots
 		drawingCanvas.graphics.moveTo(dot.x, dot.y)
@@ -67,9 +71,15 @@ onTick = (event) ->
 		dot.y += Math.random() * 5 - 2.5
 		drawingCanvas.graphics.lineTo(dot.x, dot.y)
 
-		# .moveTo(midPt.x, midPt.y)
-		# .curveTo(oldPt.x, oldPt.y, oldMidPt.x, oldMidPt.y)
-
+		# wrap dots around the screen.
+		if (dot.x < 0)
+			dot.x += canvas.width
+		else if (dot.x > canvas.width)
+			dot.x -= canvas.width
+		if (dot.y < 0)
+			dot.y += canvas.height
+		else if (dot.y > canvas.height)
+			dot.y -= canvas.height
 
 	lastMouse.x = stage.mouseX
 	lastMouse.y = stage.mouseY

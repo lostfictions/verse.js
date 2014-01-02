@@ -1,27 +1,52 @@
 'use strict'
 
-canvas = stage = drawingCanvas = null
+notes = [
+	"e", "f", "f#", "g", "g#"
+	"a", "a#", "b", "c", "c#"
+	"d", "d#", "e", "f", "f#"
+	"g", "g#", "a", "a#", "b"
+	"c", "c#", "d", "d#", "e"
+	"f", "f#", "g", "g#", "a"
+	"a#", "b", "c", "c#", "d"
+	"d#", "e"
+]
 
 config =
+	# a multiplier on the canvas size to determine the max number of points.
+	maxDotFactor: 60 / 500000
 	# max distance for the mouse to exert an influence on a dot.
 	maxMouseDistance: 100
 	# max distance within which a dot will contact another.
 	maxContactDistance: 50
 	# minimum time before a dot can contact another.
 	contactTimeout: 400
-
+	# multiplier for the velocity we confer when dots make contact.
 	contactVelocityFactor: 0.5
+
 	dotSpeedThreshold: 10
 	dotDeceleration: 0.99
+
 	fadeFactor: 0.05
-	mouseMoveTimeout: 300
-	# maxDotCount: 1 # set in init(), since it's based on the canvas size
+
+	chordChangeTimeout: 5000
+	
+	chordList: [
+		"e, c, g"
+		"e, b, g"
+	]
+
+# we'll set this in init() based on the canvas size.
+maxDotCount = 1
 
 dots = []
 
 lastMouse = { x: 0, y: 0 }
 
-mouseMoveTimeout = 0
+scale = []
+chordChangeTimeout = 0
+chordIndex = 0
+
+canvas = stage = drawingCanvas = null
 
 @init = () ->
 	canvas = document.getElementById("mainCanvas")
@@ -37,28 +62,32 @@ mouseMoveTimeout = 0
 
 	fadeRect = new createjs.Shape()
 
+	drawingCanvas = new createjs.Shape()
+	stage.addChild(drawingCanvas)
+
 	#TODO: this needs to be reset if we rescale the canvas.
 	fadeRect.graphics
 		.beginFill("rgba(0,0,0,#{ config.fadeFactor })")
 		.rect(0, 0, canvas.width, canvas.height)
 	stage.addChild(fadeRect)
 
-	drawingCanvas = new createjs.Shape()
-	stage.addChild(drawingCanvas)
+	#TODO: this also needs to be reset if we rescale the canvas.
+	# (rescaling should also remove points if needed.)
+	maxDotCount = Math.round(config.maxDotFactor * canvas.width * canvas.height)
+	# console.log("maxDotCount: " + maxDotCount)
 
-	config.maxDotCount = Math.round(60 * canvas.width / 700)
-	console.log("maxDotCount: " + config.maxDotCount)
+	setChord(chordIndex)
 
 	stage.addEventListener("stagemousemove", onMouseMove)
 	createjs.Ticker.addEventListener("tick", onTick)
 
 onTick = (event) ->
 
-	mouseMoveTimeout -= event.delta
+	chordChangeTimeout -= event.delta
 	dMouseX = stage.mouseX - lastMouse.x
 	dMouseY = stage.mouseY - lastMouse.y
 	
-	if(dots.length < config.maxDotCount and Math.random() < 0.2)
+	if(dots.length < maxDotCount and Math.random() < 0.2)
 		addDot()
 
 
@@ -78,7 +107,7 @@ onTick = (event) ->
 		dot.y += dot.velocity.y
 		drawingCanvas.graphics.lineTo(dot.x, dot.y)
 
-		wrapToStage dot
+		wrapToStage(dot)
 
 		dot.contactTimeout -= event.delta
 
@@ -103,33 +132,30 @@ onTick = (event) ->
 						.moveTo(dot.x, dot.y)
 						.lineTo(otherDot.x, otherDot.y)
 
-					if(not wasNotePlayed)
+					if(wasNotePlayed is false)
 						wasNotePlayed = true
 
-						# (only the first terms are halved here. that's how it was in the original.)
+						# (only the first terms are halved here, yeah. that's how it is in the actionscript!)
 						dvx = 0.5 * Math.abs(dot.velocity.x) + Math.abs(otherDot.velocity.x)
 						dvy = 0.5 * Math.abs(dot.velocity.y) + Math.abs(otherDot.velocity.y)
 
 						relativeSpeed = Math.sqrt(dvx * dvx + dvy * dvy)
 
-						# _s._sound.addTone(
-						# 	440,
-						# 	scale_verse[
-						# 		Math.max(
-						# 			0,
-						# 			int(Math.random() * 2 ) * 2 - 1 + Math.min(
-						# 				scale_verse.length - 1 - uint(scale_verse.length * yd / sH),
-						# 				scale_verse.length - 1
-						# 			)
-						# 		)
-						# 	],
-						# 	-1,
-						# 	xd / (sW * .5) - 1,
-						# 	1,
-						# 	(.2 + .8 * (d / s)) * VOLUME //s = 10.
-						# );
+
+						indScale = Math.round(Math.random() * 2 ) * 2 - 1 + scale.length - 1 - Math.round(scale.length * dvy / canvas.height)
+						indScale = clamp(indScale, 0, scale.length - 1)
+
+						noteToPlay = scale[indScale]
+
+						# this is probably pan. in which case using dxv here maybe doesn't make much sense?
+						MYSTERY_FACTOR = dvx / (canvas.width * 0.5) - 1
+
+						# these numbers might not make sense for the SoundJS API.
+						volume = 0.2 + 0.8 * d / config.dotSpeedThreshold
+
+						#TODO: here we will play a beautiful sound.
 		
-		# end iterating through other dots.
+		# done iterating through other dots.
 
 		dX = dot.x - stage.mouseX
 		dY = dot.y - stage.mouseY
@@ -154,21 +180,20 @@ onTick = (event) ->
 	stage.update()
 
 onMouseMove = (event) ->
-	# midPt = new createjs.Point(oldPt.x + stage.mouseX >> 1, oldPt.y + stage.mouseY >> 1)
+	if(chordChangeTimeout < 0)
+		chordIndex = (chordIndex + 1) % config.chordList.length
+		setChord(chordIndex)
 
-	# drawingCanvas.graphics
-	# 	.clear()
-	# 	.setStrokeStyle(stroke, 'round', 'round')
-	# 	.beginStroke(color)
-	# 	.moveTo(midPt.x, midPt.y)
-	# 	.curveTo(oldPt.x, oldPt.y, oldMidPt.x, oldMidPt.y)
+	chordChangeTimeout = config.chordChangeTimeout
 
-	# oldPt.x = stage.mouseX
-	# oldPt.y = stage.mouseY
+setChord = (index) ->
+	chordNotes = config.chordList[index]
 
-	# oldMidPt.x = midPt.x
-	# oldMidPt.y = midPt.y
+	scale = []
 
+	for note, i in notes
+		if(chordNotes.indexOf(note) isnt -1)
+			scale.push(i)
 
 addDot = () ->
 	dot = new createjs.Point(
@@ -189,3 +214,6 @@ wrapToStage = (dot) ->
 		dot.y += canvas.height
 	else if (dot.y > canvas.height)
 		dot.y -= canvas.height
+
+clamp = (val, min, max) ->
+	Math.max(min, Math.min(max, val))

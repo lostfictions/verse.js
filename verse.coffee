@@ -56,7 +56,9 @@ canvas = stage = drawingCanvas = null
 	stage.enableDOMEvents(true)
 
 	createjs.Touch.enable(stage)
-	createjs.Ticker.setFPS(24)
+
+	createjs.Ticker.timingMode = createjs.Ticker.RAF_SYNCHED
+	createjs.Ticker.setFPS(60)
 
 	canvas.setAttribute("style", "background-color: #000000")
 

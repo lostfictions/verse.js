@@ -7,31 +7,10 @@
 		<meta name=viewport content="width=device-width">
 		<link rel=stylesheet href="verse.css">
 		<!-- <link rel="shortcut icon" href=img/favicon.png> -->
-
-		<script src="http://code.createjs.com/createjs-2013.12.12.min.js"></script>
-		<!-- unminified version, for debugging -->
-		<!-- <script src="http://code.createjs.com/createjs-2013.12.12.combined.js"></script> -->
-
+		<script src="easeljs-0.7.1.min.js"></script>
 		<script src="verse.js"></script>
 	</head>
 	<body onload="init();">
 		<canvas id="mainCanvas" width="960" height="400"></canvas>
 	</body>
-	
-	<script type="text/javascript">
-	// fill screen, handle window resize (albeit slightly awkwardly)
-	// from http://stackoverflow.com/a/8486324
-	(function() {
-		var canvas = document.getElementById('mainCanvas');
-		var context = canvas.getContext('2d');
-
-		window.addEventListener('resize', resizeCanvas, false);
-
-		function resizeCanvas() {
-				canvas.width = window.innerWidth;
-				canvas.height = window.innerHeight;
-		}
-		resizeCanvas();
-	})();
-	</script>
 </html>

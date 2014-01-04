@@ -11,6 +11,10 @@ notes = [
 	"d#", "e"
 ]
 
+audio =
+	actives: []
+	pool: []
+
 config =
 	# a multiplier on the canvas size to determine the max number of points.
 	maxDotFactor: 60 / 500000
@@ -29,7 +33,9 @@ config =
 	fadeFactor: 0.05
 
 	chordChangeTimeout: 5000
-	
+	dotAddRemoveTimeout: 100
+	noteTriggerTimeout: 41.67 # 24fps in the flash version = ~42ms delay
+
 	chordList: [
 		"e, c, g"
 		"e, b, g"
@@ -42,11 +48,14 @@ dots = []
 
 lastMouse = { x: 0, y: 0 }
 
-scale = []
 chordChangeTimeout = 0
-chordIndex = 0
+dotAddRemoveTimeout = 0
+noteTriggerTimeout = 0
 
-canvas = stage = drawingCanvas = null
+chordIndex = 0
+scale = []
+
+fadeRect = canvas = stage = drawingCanvas = null
 
 @init = () ->
 	canvas = document.getElementById("mainCanvas")
@@ -62,35 +71,59 @@ canvas = stage = drawingCanvas = null
 
 	canvas.setAttribute("style", "background-color: #000000")
 
-	fadeRect = new createjs.Shape()
-
 	drawingCanvas = new createjs.Shape()
 	stage.addChild(drawingCanvas)
 
-	#TODO: this needs to be reset if we rescale the canvas.
-	fadeRect.graphics
-		.beginFill("rgba(0,0,0,#{ config.fadeFactor })")
-		.rect(0, 0, canvas.width, canvas.height)
+	fadeRect = new createjs.Shape()
 	stage.addChild(fadeRect)
-
-	#TODO: this also needs to be reset if we rescale the canvas.
-	# (rescaling should also remove points if needed.)
-	maxDotCount = Math.round(config.maxDotFactor * canvas.width * canvas.height)
-	# console.log("maxDotCount: " + maxDotCount)
-
+	
 	setChord(chordIndex)
 
+
+
+	# audio stuff.
+	window.AudioContext = window.AudioContext || window.webkitAudioContext
+	if(not window.AudioContext?)
+		console.log("audio api not available!")
+		# TODO: do something smart to handle the api not being available.
+	else
+		audio.ctx = new AudioContext()
+
+	window.addEventListener('resize', onResize)
+	onResize()
 	stage.addEventListener("stagemousemove", onMouseMove)
 	createjs.Ticker.addEventListener("tick", onTick)
 
-onTick = (event) ->
+onResize = () ->
+	canvas.width = window.innerWidth
+	canvas.height = window.innerHeight
+	fadeRect.graphics
+		.clear()
+		.beginFill("rgba(0,0,0,#{ config.fadeFactor })")
+		.rect(0, 0, canvas.width, canvas.height)
 
+	maxDotCount = Math.round(config.maxDotFactor * canvas.width * canvas.height)
+	console.log("maxDotCount: " + maxDotCount)
+
+# TODO: should be okay to not use our delta time everywhere because our ticker
+# mode is RAF_SYNCHED, but we should do it anyway.
+onTick = (event) ->
+	tickTones(event.delta)
 	chordChangeTimeout -= event.delta
+	dotAddRemoveTimeout -= event.delta
+	noteTriggerTimeout -= event.delta
+
 	dMouseX = stage.mouseX - lastMouse.x
 	dMouseY = stage.mouseY - lastMouse.y
 	
-	if(dots.length < maxDotCount and Math.random() < 0.2)
-		addDot()
+	if(dotAddRemoveTimeout < 0)
+		dotAddRemoveTimeout = config.dotAddRemoveTimeout
+		if(dots.length < maxDotCount)
+			addDot()
+			console.log "adding... " + dots.length
+		else if(dots.length > maxDotCount)
+			dots.pop()
+			console.log "removing... " + dots.length
 
 
 	g = drawingCanvas.graphics
@@ -134,29 +167,27 @@ onTick = (event) ->
 						.moveTo(dot.x, dot.y)
 						.lineTo(otherDot.x, otherDot.y)
 
-					if(wasNotePlayed is false)
-						wasNotePlayed = true
+					if(noteTriggerTimeout < 0)
+						noteTriggerTimeout = config.noteTriggerTimeout
 
-						# (only the first terms are halved here, yeah. that's how it is in the actionscript!)
-						dvx = 0.5 * Math.abs(dot.velocity.x) + Math.abs(otherDot.velocity.x)
-						dvy = 0.5 * Math.abs(dot.velocity.y) + Math.abs(otherDot.velocity.y)
-
-						relativeSpeed = Math.sqrt(dvx * dvx + dvy * dvy)
-
-
-						indScale = Math.round(Math.random() * 2 ) * 2 - 1 + scale.length - 1 - Math.round(scale.length * dvy / canvas.height)
+						avgYPos = (dot.y + otherDot.y) / 2
+						indScale = Math.round(Math.random() * 2 ) * 2 - 1 + scale.length - 1 - Math.round(scale.length * avgYPos / canvas.height)
 						indScale = clamp(indScale, 0, scale.length - 1)
 
-						noteToPlay = scale[indScale]
+						avgXPos = (dot.x + otherDot.x) / 2
+						pan = avgXPos / (canvas.width * 0.5) - 1
 
-						# this is probably pan. in which case using dxv here maybe doesn't make much sense?
-						MYSTERY_FACTOR = dvx / (canvas.width * 0.5) - 1
+						avgXVel = (Math.abs(dot.velocity.x) + Math.abs(otherDot.velocity.x)) / 2
+						avgYVel = (Math.abs(dot.velocity.y) + Math.abs(otherDot.velocity.y)) / 2
+						avgVelocity = Math.sqrt(avgXVel * avgXVel + avgYVel * avgYVel)
+						avgVelocity = clamp(avgVelocity, 0, config.dotSpeedThreshold)
 
-						# these numbers might not make sense for the SoundJS API.
-						volume = 0.2 + 0.8 * relativeSpeed / config.dotSpeedThreshold
+						volume = 0.2 + 0.8 * (avgVelocity / config.dotSpeedThreshold)
 
-						#TODO: here we will play a beautiful sound.
-		
+						note = scale[indScale]
+
+						addTone(note, pan, volume)
+
 		# done iterating through other dots.
 
 		dX = dot.x - stage.mouseX
@@ -180,6 +211,50 @@ onTick = (event) ->
 	lastMouse.y = stage.mouseY
 
 	stage.update()
+
+tickTones = (delta) ->
+	toDequeue = 0
+
+	for tone in audio.actives
+		tone.duration -= delta
+
+		if(tone.duration < 0)
+			tone.osc.stop(0)
+			toDequeue++
+		else
+			frac = (tone.duration / tone.initDuration) * tone.volume
+			# let's use exponential instead of linear gain.
+			tone.gain.gain.value = frac * frac
+
+	while(toDequeue > 0)
+		# actives should be ordered by duration, so we can just shift from the front to dequeue them.
+		audio.pool.push(audio.actives.shift())
+		toDequeue--
+
+# TODO: handle pan using a PannerNode
+addTone = (note, pan, volume) ->
+	tone = audio.pool.pop()
+	if(not tone?)
+		osc = audio.ctx.createOscillator()
+		osc.type = "sine"
+		gain = audio.ctx.createGain()
+		osc.connect(gain)
+		gain.connect(audio.ctx.destination)
+		tone = 
+			osc: osc
+			gain: gain
+		
+	tone.duration = 1000
+	tone.initDuration = tone.duration
+	
+	tone.volume = volume
+	tone.gain.gain.value = tone.volume
+
+	tone.osc.frequency.value = 440 * Math.pow(2, (note / 12) - 1)
+
+	tone.osc.start(0)
+	audio.actives.push(tone)
+
 
 onMouseMove = (event) ->
 	if(chordChangeTimeout < 0)

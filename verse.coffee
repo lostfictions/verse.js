@@ -221,8 +221,8 @@ tickTones = (delta) ->
 
 		if(tone.duration < 0)
 			# see hack below -- if we stop the oscillator, it seems to get GC'd in Firefox right now.
-			# tone.osc.stop(0)
-			tone.gain.gain.value = 0
+			tone.osc.stop(0)
+			# tone.gain.gain.value = 0
 			toDequeue++
 		else
 			frac = (tone.duration / tone.initDuration) * tone.volume
@@ -231,12 +231,16 @@ tickTones = (delta) ->
 
 	while(toDequeue > 0)
 		# actives should be ordered by duration, so we can just shift from the front to dequeue them.
-		audio.pool.push(audio.actives.shift())
+		audio.actives.shift()
+		# audio.pool.push()
 		toDequeue--
 
 # TODO: handle pan using a PannerNode
 addTone = (note, pan, volume) ->
-	tone = audio.pool.pop()
+	if(audio.actives.length > 8)
+		return
+	# tone = audio.pool.pop()
+	tone = null
 	if(not tone?)
 		osc = audio.ctx.createOscillator()
 		osc.type = "sine"
@@ -248,7 +252,6 @@ addTone = (note, pan, volume) ->
 			gain: gain
 		# HACK: start the oscillator on initialization and never stop it,
 		# since it seems to get erroneously GC'd or messed up otherwise?
-		tone.osc.start(0)
 		
 	tone.duration = 1000
 	tone.initDuration = tone.duration
@@ -258,8 +261,7 @@ addTone = (note, pan, volume) ->
 
 	tone.osc.frequency.value = 440 * Math.pow(2, (note / 12) - 1)
 
-	# HACK: see above
-	# tone.osc.start(0)	
+	tone.osc.start(0)
 
 	audio.actives.push(tone)
 

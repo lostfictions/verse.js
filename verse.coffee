@@ -34,7 +34,7 @@ config =
 
 	chordChangeTimeout: 5000
 	dotAddRemoveTimeout: 100
-	noteTriggerTimeout: 41.67 # 24fps in the flash version = ~42ms delay
+	noteTriggerTimeout: 50
 
 	chordList: [
 		"e, c, g"
@@ -167,7 +167,8 @@ onTick = (event) ->
 						.moveTo(dot.x, dot.y)
 						.lineTo(otherDot.x, otherDot.y)
 
-					if(noteTriggerTimeout < 0)
+					if(not wasNotePlayed and noteTriggerTimeout < 0)
+						wasNotePlayed = true
 						noteTriggerTimeout = config.noteTriggerTimeout
 
 						avgYPos = (dot.y + otherDot.y) / 2
@@ -219,7 +220,9 @@ tickTones = (delta) ->
 		tone.duration -= delta
 
 		if(tone.duration < 0)
-			tone.osc.stop(0)
+			# see hack below -- if we stop the oscillator, it seems to get GC'd in Firefox right now.
+			# tone.osc.stop(0)
+			tone.gain.gain.value = 0
 			toDequeue++
 		else
 			frac = (tone.duration / tone.initDuration) * tone.volume
@@ -243,6 +246,9 @@ addTone = (note, pan, volume) ->
 		tone = 
 			osc: osc
 			gain: gain
+		# HACK: start the oscillator on initialization and never stop it,
+		# since it seems to get erroneously GC'd or messed up otherwise?
+		tone.osc.start(0)
 		
 	tone.duration = 1000
 	tone.initDuration = tone.duration
@@ -252,7 +258,9 @@ addTone = (note, pan, volume) ->
 
 	tone.osc.frequency.value = 440 * Math.pow(2, (note / 12) - 1)
 
-	tone.osc.start(0)
+	# HACK: see above
+	# tone.osc.start(0)	
+
 	audio.actives.push(tone)
 
 

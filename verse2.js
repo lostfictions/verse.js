@@ -97,7 +97,7 @@ function onResize() {
   canvas.height = window.innerHeight;
   fadeRect.graphics
     .clear()
-    .beginFill('rgba(0,0,0,#{ config.fadeFactor })')
+    .beginFill(`rgba(0,0,0,${ config.fadeFactor })`)
     .rect(0, 0, canvas.width, canvas.height);
 
   maxDotCount = Math.round(config.maxDotFactor * canvas.width * canvas.height);
@@ -127,7 +127,7 @@ function onTick(event) {
     }
   }
 
-  let g = drawingCanvas.graphics;
+  const g = drawingCanvas.graphics;
 
   g
     .clear()
@@ -138,10 +138,10 @@ function onTick(event) {
   let wasNotePlayed = false;
 
   for(let dot of dots) {
-    drawingCanvas.graphics.moveTo(dot.x, dot.y);
+    g.moveTo(dot.x, dot.y);
     dot.x += dot.velocity.x;
     dot.y += dot.velocity.y;
-    drawingCanvas.graphics.lineTo(dot.x, dot.y);
+    g.lineTo(dot.x, dot.y);
 
     wrapToStage(dot);
 

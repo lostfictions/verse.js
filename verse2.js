@@ -188,7 +188,8 @@ function onTick(event) {
 
           const avgXVel = (Math.abs(dot.velocity.x) + Math.abs(otherDot.velocity.x)) / 2;
           const avgYVel = (Math.abs(dot.velocity.y) + Math.abs(otherDot.velocity.y)) / 2;
-          const avgVelocity = Math.sqrt(avgXVel * avgXVel + avgYVel * avgYVel); //TODO: shouldn't this error?
+
+          let avgVelocity = Math.sqrt(avgXVel * avgXVel + avgYVel * avgYVel);
           avgVelocity = clamp(avgVelocity, 0, config.dotSpeedThreshold);
 
           const volume = 0.2 + 0.8 * (avgVelocity / config.dotSpeedThreshold);
@@ -261,7 +262,7 @@ function addTone(note, pan, volume) {
     return;
   }
   //tone = audio.pool.pop()
-  const tone = null;
+  let tone = null;
   if(!tone) {
     const osc = audio.ctx.createOscillator();
     osc.type = 'sine';
@@ -340,6 +341,6 @@ function wrapToStage(dot) {
 }
 
 function clamp(val, min, max) {
-  Math.max(min, Math.min(max, val));
+  return Math.max(min, Math.min(max, val));
 }
 

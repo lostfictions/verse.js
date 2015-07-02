@@ -236,8 +236,6 @@ function tickTones(delta) {
     tone.duration -= delta;
 
     if(tone.duration < 0) {
-      //see hack below -- if we stop the oscillator, it seems to get GC'd in Firefox right now.
-      tone.osc.stop(0);
       //tone.gain.gain.value = 0
       toDequeue++;
     }
@@ -250,7 +248,12 @@ function tickTones(delta) {
 
   while(toDequeue > 0) {
     //actives should be ordered by duration, so we can just shift from the front to dequeue them.
-    audio.actives.shift();
+    const deq = audio.actives.shift();
+    deq.osc.stop(0);
+    deq.osc.disconnect();
+    deq.gain.disconnect();
+    delete deq.osc;
+    delete deq.gain;
     //audio.pool.push()
     toDequeue--;
   }
@@ -269,14 +272,12 @@ function addTone(note, pan, volume) {
 
     const gain = audio.ctx.createGain();
     osc.connect(gain);
-
     gain.connect(audio.ctx.destination);
+    
     tone = {
       osc: osc,
       gain: gain
     };
-    //HACK: start the oscillator on initialization and never stop it,
-    //since it seems to get erroneously GC'd or messed up otherwise?
   }
 
   tone.duration = 1000;

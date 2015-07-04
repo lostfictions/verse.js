@@ -15,6 +15,7 @@ const notes = [
 ];
 
 const config = {
+  bufferSize: 2048,
   maxDotFactor: 60 / 500000,
   maxMouseDistance: 100,
   maxContactDistance: 50,
@@ -29,9 +30,11 @@ const config = {
   chordList: ['e, c, g', 'e, b, g']
 };
 
-let audio = {
+const audio = {
   actives: [],
-  pool: []
+  pool: [],
+  ctx: null,
+  generator: null
 };
 
 let maxDotCount = 1;
@@ -49,10 +52,10 @@ let noteTriggerTimeout = 0;
 let chordIndex = 0;
 let scale = [];
 
-let fadeRect = null;
-let canvas = null;
-let stage = null;
-let drawingCanvas = null;
+let fadeRect;
+let canvas;
+let stage;
+let drawingCanvas;
 
 function init() {
   canvas = document.getElementById('mainCanvas');
@@ -81,9 +84,13 @@ function init() {
   if(!window.AudioContext) {
     console.log('audio api not available!');
     //TODO: do something smart to handle the api not being available.
+    return;
   }
   else {
     audio.ctx = new AudioContext();
+    audio.generator = audio.ctx.createScriptProcessor(config.bufferSize, 0, 2);
+    audio.generator.onaudioprocess = processAudio;
+    audio.generator.connect(audio.ctx.destination);
   }
 
   window.addEventListener('resize', onResize);
@@ -107,7 +114,6 @@ function onResize() {
 //TODO: should be okay to not use our delta time everywhere because our ticker
 //mode is RAF_SYNCHED, but we should do it anyway.
 function onTick(event) {
-  tickTones(event.delta);
   chordChangeTimeout -= event.delta;
   dotAddRemoveTimeout -= event.delta;
   noteTriggerTimeout -= event.delta;
@@ -119,11 +125,9 @@ function onTick(event) {
     dotAddRemoveTimeout = config.dotAddRemoveTimeout;
     if(dots.length < maxDotCount){
       addDot();
-      console.log('adding... ' + dots.length);
     }
     else if(dots.length > maxDotCount){
       dots.pop();
-      console.log('removing... ' + dots.length);
     }
   }
 
@@ -180,7 +184,8 @@ function onTick(event) {
           noteTriggerTimeout = config.noteTriggerTimeout;
 
           const avgYPos = (dot.y + otherDot.y) / 2;
-          let indScale = Math.round(Math.random() * 2 ) * 2 - 1 + scale.length - 1 - Math.round(scale.length * avgYPos / canvas.height);
+          let indScale = Math.round(Math.random() * 2 ) * 2 - 1 +
+            scale.length - 1 - Math.round(scale.length * avgYPos / canvas.height);
           indScale = clamp(indScale, 0, scale.length - 1);
 
           const avgXPos = (dot.x + otherDot.x) / 2;
@@ -228,67 +233,63 @@ function onTick(event) {
   stage.update();
 }
 
+function processAudio(e) {
+  const left = e.outputBuffer.getChannelData(0);
+  const right = e.outputBuffer.getChannelData(1);
 
-function tickTones(delta) {
-  let toDequeue = 0;
+  //these buffers ain't clean!
+  for(let i = 0; i < config.bufferSize; i++) {
+    left[i] = 0;
+    right[i] = 0;
+  }
 
-  for(let tone of audio.actives) {
-    tone.duration -= delta;
+  for(let j = audio.actives.length - 1; j >= 0; j--) {
+    const tone = audio.actives[j];
+    for(let i = 0; i < config.bufferSize; i++) {
+      if(tone.duration <= 0) {
+        continue;
+      }
 
-    if(tone.duration < 0) {
-      //tone.gain.gain.value = 0
-      toDequeue++;
+      //i don't really get what these next few values mean. they basically look like magic numbers to me.
+      const env = tone.duration / 20000;
+
+      let amp;
+      if(tone.phase < 0.5) {
+        let tmp = (tone.phase * 4 - 1);
+        amp = (1 - tmp * tmp) * env * env * 0.5;
+      }
+      else {
+        let tmp = (tone.phase * 4 - 3);
+        amp = (tmp * tmp - 1) * env * env * 0.5;
+      }
+
+      tone.phase += tone.freq;
+
+      if(tone.phase >= 1) {
+        tone.phase--;
+      }
+
+      left[i] += amp * tone.gainL;
+      right[i] += amp * tone.gainR;
+
+      tone.duration--;
     }
-    else {
-      const frac = (tone.duration / tone.initDuration) * tone.volume;
-      //let's use exponential instead of linear gain.
-      tone.gain.gain.value = frac * frac;
+    if(tone.duration <= 0) {
+      audio.actives.splice(j, 1);
     }
   }
 
-  while(toDequeue > 0) {
-    //actives should be ordered by duration, so we can just shift from the front to dequeue them.
-    const deq = audio.actives.shift();
-    deq.osc.stop(0);
-    deq.osc.disconnect();
-    deq.gain.disconnect();
-    delete deq.osc;
-    delete deq.gain;
-    //audio.pool.push()
-    toDequeue--;
-  }
+  //console.log('left: ' + (left.reduce((p, c) => p + c) / left.length));
 }
 
-//TODO: handle pan using a PannerNode
 function addTone(note, pan, volume) {
-  if(audio.actives.length > 8) {
-    return;
-  }
-  //tone = audio.pool.pop()
-  let tone = null;
-  if(!tone) {
-    const osc = audio.ctx.createOscillator();
-    osc.type = 'sine';
-
-    const gain = audio.ctx.createGain();
-    osc.connect(gain);
-    gain.connect(audio.ctx.destination);
-    
-    tone = {
-      osc: osc,
-      gain: gain
-    };
-  }
-
-  tone.duration = 1000;
-  tone.initDuration = tone.duration;
-
-  tone.volume = volume;
-  tone.gain.gain.value = tone.volume;
-
-  tone.osc.frequency.value = 440 * Math.pow(2, (note / 12) - 1);
-
-  tone.osc.start(0);
+  const tone = {
+    duration: 1 * 44100,
+    freq: 440 * Math.pow(2, (note / 12) - 1) / 44100,
+    phase: 0,
+    gainL: (1 - pan) * volume,
+    gainR: (pan + 1) * volume
+  };
 
   audio.actives.push(tone);
 }

@@ -1,3 +1,5 @@
+/* @flow weak */
+
 //verse.js
 //2014 - 2015
 
@@ -80,18 +82,17 @@ function init() {
   setChord(chordIndex);
 
   //audio stuff.
-  window.AudioContext = window.AudioContext || window.webkitAudioContext;
-  if(!window.AudioContext) {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if(!AudioContext) {
     console.log('audio api not available!');
     //TODO: do something smart to handle the api not being available.
     return;
   }
-  else {
-    audio.ctx = new AudioContext();
-    audio.generator = audio.ctx.createScriptProcessor(config.bufferSize, 0, 2);
-    audio.generator.onaudioprocess = processAudio;
-    audio.generator.connect(audio.ctx.destination);
-  }
+  
+  audio.ctx = new AudioContext();
+  audio.generator = audio.ctx.createScriptProcessor(config.bufferSize, 0, 2);
+  audio.generator.onaudioprocess = processAudio;
+  audio.generator.connect(audio.ctx.destination);
 
   window.addEventListener('resize', onResize);
   onResize();
@@ -123,10 +124,10 @@ function onTick(event) {
 
   if(dotAddRemoveTimeout < 0) {
     dotAddRemoveTimeout = config.dotAddRemoveTimeout;
-    if(dots.length < maxDotCount){
+    if(dots.length < maxDotCount) {
       addDot();
     }
-    else if(dots.length > maxDotCount){
+    else if(dots.length > maxDotCount) {
       dots.pop();
     }
   }
@@ -141,7 +142,7 @@ function onTick(event) {
 
   let wasNotePlayed = false;
 
-  for(let dot of dots) {
+  for(const dot of dots) {
     g.moveTo(dot.x, dot.y);
     dot.x += dot.velocity.x;
     dot.y += dot.velocity.y;
@@ -151,7 +152,7 @@ function onTick(event) {
 
     dot.contactTimeout -= event.delta;
 
-    for(let otherDot of dots) {
+    for(const otherDot of dots) {
       if(otherDot === dot) {
         continue;
       }
@@ -255,11 +256,11 @@ function processAudio(e) {
 
       let amp;
       if(tone.phase < 0.5) {
-        let tmp = (tone.phase * 4 - 1);
+        const tmp = (tone.phase * 4 - 1);
         amp = (1 - tmp * tmp) * env * env * 0.5;
       }
       else {
-        let tmp = (tone.phase * 4 - 3);
+        const tmp = (tone.phase * 4 - 3);
         amp = (tmp * tmp - 1) * env * env * 0.5;
       }
 
@@ -328,16 +329,16 @@ function addDot() {
 }
 
 function wrapToStage(dot) {
-  if (dot.x < 0) {
+  if(dot.x < 0) {
     dot.x += canvas.width;
   }
-  else if (dot.x > canvas.width) {
+  else if(dot.x > canvas.width) {
     dot.x -= canvas.width;
   }
-  if (dot.y < 0) {
+  if(dot.y < 0) {
     dot.y += canvas.height;
   }
-  else if (dot.y > canvas.height) {
+  else if(dot.y > canvas.height) {
     dot.y -= canvas.height;
   }
 }
